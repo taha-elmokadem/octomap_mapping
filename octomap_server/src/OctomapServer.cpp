@@ -387,7 +387,7 @@ void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr
   insertScan(sensorToWorldTf.getOrigin(), pc_ground, pc_nonground);
 
   double total_elapsed = (ros::WallTime::now() - startTime).toSec();
-  ROS_DEBUG("Pointcloud insertion in OctomapServer done (%zu+%zu pts (ground/nonground), %f sec)", pc_ground.size(), pc_nonground.size(), total_elapsed);
+  ROS_INFO("Pointcloud insertion in OctomapServer done (%zu+%zu pts (ground/nonground), %f sec)", pc_ground.size(), pc_nonground.size(), total_elapsed);
 
   publishAll(cloud->header.stamp);
 }
@@ -726,7 +726,7 @@ void OctomapServer::publishAll(const ros::Time& rostime){
     cloud.header.frame_id = m_worldFrameId;
     cloud.header.stamp = rostime;
     m_pointCloudPub.publish(cloud);
-    //this->publishLocalPointCloud(cloud);
+    this->publishLocalPointCloud(cloud);
   }
 
   if (publishBinaryMap)

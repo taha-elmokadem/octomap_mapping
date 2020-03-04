@@ -48,6 +48,10 @@
 		<param name="color/a" value="$(arg color_a)" />
 
 		<param name="latch" value="$(arg latch)" />
+		
+		<param name="local_pointcloud_X_length" value="2.0" />
+                <param name="local_pointcloud_Y_length" value="2.0" />
+                <param name="local_pointcloud_Z_length" value="2.0" />
 
 	</node>
 </launch>
