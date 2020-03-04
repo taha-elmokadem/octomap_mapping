@@ -726,7 +726,7 @@ void OctomapServer::publishAll(const ros::Time& rostime){
     cloud.header.frame_id = m_worldFrameId;
     cloud.header.stamp = rostime;
     m_pointCloudPub.publish(cloud);
-    this->publishLocalPointCloud(cloud);
+    //this->publishLocalPointCloud(cloud);
   }
 
   if (publishBinaryMap)

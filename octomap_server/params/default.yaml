@@ -6,7 +6,7 @@ base_frame_id: 'base_link'
 
 sensor_model/max_range: 3.0
 
-cloud_in: '/camera/voxel_grid/output'
+cloud_in: '/d435/voxel_grid/output'
 
 filter_ground: false
 
