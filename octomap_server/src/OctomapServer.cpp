@@ -387,7 +387,7 @@ void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr
   insertScan(sensorToWorldTf.getOrigin(), pc_ground, pc_nonground);
 
   double total_elapsed = (ros::WallTime::now() - startTime).toSec();
-  ROS_INFO("Pointcloud insertion in OctomapServer done (%zu+%zu pts (ground/nonground), %f sec)", pc_ground.size(), pc_nonground.size(), total_elapsed);
+  ROS_DEBUG("Pointcloud insertion in OctomapServer done (%zu+%zu pts (ground/nonground), %f sec)", pc_ground.size(), pc_nonground.size(), total_elapsed);
 
   publishAll(cloud->header.stamp);
 }
@@ -663,6 +663,9 @@ void OctomapServer::publishAll(const ros::Time& rostime){
     }
   }
 
+  double total_elapsed1 = (ros::WallTime::now() - startTime).toSec();
+  ROS_INFO("Traversing all leafs in OctomapServer took %f sec", total_elapsed1);
+
   // call post-traversal hook:
   handlePostNodeTraversal(rostime);
 
@@ -691,6 +694,9 @@ void OctomapServer::publishAll(const ros::Time& rostime){
 
     m_markerPub.publish(occupiedNodesVis);
   }
+
+  total_elapsed1 = (ros::WallTime::now() - startTime).toSec();
+  ROS_INFO("after publishing markersArray in OctomapServer took %f sec", total_elapsed1);
 
 
   // finish FreeMarkerArray:
@@ -737,7 +743,7 @@ void OctomapServer::publishAll(const ros::Time& rostime){
 
 
   double total_elapsed = (ros::WallTime::now() - startTime).toSec();
-  ROS_DEBUG("Map publishing in OctomapServer took %f sec", total_elapsed);
+  ROS_INFO("Map publishing in OctomapServer took %f sec", total_elapsed);
 
 }
 
