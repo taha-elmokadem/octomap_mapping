@@ -389,7 +389,8 @@ void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr
   double total_elapsed = (ros::WallTime::now() - startTime).toSec();
   ROS_DEBUG("Pointcloud insertion in OctomapServer done (%zu+%zu pts (ground/nonground), %f sec)", pc_ground.size(), pc_nonground.size(), total_elapsed);
 
-  publishAll(cloud->header.stamp);
+  //publishAll(cloud->header.stamp);
+  publishLocalMap(cloud->header.stamp);
 }
 
 void OctomapServer::insertScan(const tf::Point& sensorOriginTf, const PCLPointCloud& ground, const PCLPointCloud& nonground){
@@ -518,6 +519,171 @@ void OctomapServer::insertScan(const tf::Point& sensorOriginTf, const PCLPointCl
 #endif
 }
 
+void OctomapServer::publishLocalMap(const ros::Time& rostime){
+  ros::WallTime startTime = ros::WallTime::now();
+  size_t octomapSize = m_octree->size();
+  // TODO: estimate num occ. voxels for size of arrays (reserve)
+  if (octomapSize <= 1){
+    ROS_WARN("Nothing to publish, octree is empty");
+    return;
+  }
+
+  bool publishMarkerArray = true;
+  bool publishPointCloud  = true;
+
+  // init markers:
+  visualization_msgs::MarkerArray occupiedNodesVis;
+  // each array stores all cubes of a different size, one for each depth level:
+  occupiedNodesVis.markers.resize(m_treeDepth+1);
+
+  // init pointcloud:
+  pcl::PointCloud<PCLPoint> pclCloud;
+
+  // call pre-traversal hook:
+  handlePreNodeTraversal(rostime);
+
+  // define bounding box around robot
+  tf::Vector3 sensorPosition = sensorToWorldTf.getOrigin();
+
+  point3d min = point3d(sensorPosition[0] - m_pointcloudXBox/2,
+                        sensorPosition[1] - m_pointcloudYBox/2,
+                        sensorPosition[2] - m_pointcloudZBox/2);
+  point3d max = point3d(sensorPosition[0] + m_pointcloudXBox/2,
+                        sensorPosition[1] + m_pointcloudYBox/2,
+                        sensorPosition[2] + m_pointcloudZBox/2);
+
+  // now, traverse leafs in a bounding box in the tree (local map):
+  for (OcTreeT::leaf_bbx_iterator it = m_octree->begin_leafs_bbx(min,max),
+      end = m_octree->end_leafs_bbx(); it != end; ++it)
+  {
+    /*
+    bool inUpdateBBX = isInUpdateBBX(it);
+
+    // call general hook:
+    handleNode(it);
+    if (inUpdateBBX)
+      handleNodeInBBX(it);
+      */
+
+    if (m_octree->isNodeOccupied(*it)){
+      double z = it.getZ();
+      double half_size = it.getSize() / 2.0;
+      if (z + half_size > m_occupancyMinZ && z - half_size < m_occupancyMaxZ)
+      {
+        double size = it.getSize();
+        double x = it.getX();
+        double y = it.getY();
+#ifdef COLOR_OCTOMAP_SERVER
+        int r = it->getColor().r;
+        int g = it->getColor().g;
+        int b = it->getColor().b;
+#endif
+
+        // Ignore speckles in the map:
+        if (m_filterSpeckles && (it.getDepth() == m_treeDepth +1) && isSpeckleNode(it.getKey())){
+          ROS_DEBUG("Ignoring single speckle at (%f,%f,%f)", x, y, z);
+          continue;
+        } // else: current octree node is no speckle, send it out
+
+        /*
+        handleOccupiedNode(it);
+        if (inUpdateBBX)
+          handleOccupiedNodeInBBX(it);
+        */
+
+
+        //create marker:
+        if (publishMarkerArray){
+          unsigned idx = it.getDepth();
+          assert(idx < occupiedNodesVis.markers.size());
+
+          geometry_msgs::Point cubeCenter;
+          cubeCenter.x = x;
+          cubeCenter.y = y;
+          cubeCenter.z = z;
+
+          occupiedNodesVis.markers[idx].points.push_back(cubeCenter);
+          if (m_useHeightMap){
+            double minX, minY, minZ, maxX, maxY, maxZ;
+            m_octree->getMetricMin(minX, minY, minZ);
+            m_octree->getMetricMax(maxX, maxY, maxZ);
+
+            double h = (1.0 - std::min(std::max((cubeCenter.z-minZ)/ (maxZ - minZ), 0.0), 1.0)) *m_colorFactor;
+            occupiedNodesVis.markers[idx].colors.push_back(heightMapColor(h));
+          }
+
+#ifdef COLOR_OCTOMAP_SERVER
+          if (m_useColoredMap) {
+            std_msgs::ColorRGBA _color; _color.r = (r / 255.); _color.g = (g / 255.); _color.b = (b / 255.); _color.a = 1.0; // TODO/EVALUATE: potentially use occupancy as measure for alpha channel?
+            occupiedNodesVis.markers[idx].colors.push_back(_color);
+          }
+#endif
+        }
+
+        // insert into pointcloud:
+        if (publishPointCloud) {
+#ifdef COLOR_OCTOMAP_SERVER
+          PCLPoint _point = PCLPoint();
+          _point.x = x; _point.y = y; _point.z = z;
+          _point.r = r; _point.g = g; _point.b = b;
+          pclCloud.push_back(_point);
+#else
+          pclCloud.push_back(PCLPoint(x, y, z));
+#endif
+        }
+
+      }
+    }
+  }
+
+  double total_elapsed1 = (ros::WallTime::now() - startTime).toSec();
+  ROS_INFO("Traversing all leafs in OctomapServer took %f sec", total_elapsed1);
+
+  // call post-traversal hook:
+  handlePostNodeTraversal(rostime);
+
+  // finish MarkerArray:
+  if (publishMarkerArray){
+    for (unsigned i= 0; i < occupiedNodesVis.markers.size(); ++i){
+      double size = m_octree->getNodeSize(i);
+
+      occupiedNodesVis.markers[i].header.frame_id = m_worldFrameId;
+      occupiedNodesVis.markers[i].header.stamp = rostime;
+      occupiedNodesVis.markers[i].ns = "map";
+      occupiedNodesVis.markers[i].id = i;
+      occupiedNodesVis.markers[i].type = visualization_msgs::Marker::CUBE_LIST;
+      occupiedNodesVis.markers[i].scale.x = size;
+      occupiedNodesVis.markers[i].scale.y = size;
+      occupiedNodesVis.markers[i].scale.z = size;
+      if (!m_useColoredMap)
+        occupiedNodesVis.markers[i].color = m_color;
+
+
+      if (occupiedNodesVis.markers[i].points.size() > 0)
+        occupiedNodesVis.markers[i].action = visualization_msgs::Marker::ADD;
+      else
+        occupiedNodesVis.markers[i].action = visualization_msgs::Marker::DELETE;
+    }
+
+    m_markerPub.publish(occupiedNodesVis);
+  }
+
+  total_elapsed1 = (ros::WallTime::now() - startTime).toSec();
+  ROS_INFO("after publishing markersArray in OctomapServer took %f sec", total_elapsed1);
+
+  // finish pointcloud:
+  if (publishPointCloud){
+    sensor_msgs::PointCloud2 cloud;
+    pcl::toROSMsg (pclCloud, cloud);
+    cloud.header.frame_id = m_worldFrameId;
+    cloud.header.stamp = rostime;
+    m_pointCloudPub.publish(cloud);
+    this->publishLocalPointCloud(cloud);
+  }
+
+  double total_elapsed = (ros::WallTime::now() - startTime).toSec();
+  ROS_INFO("Map publishing in OctomapServer took %f sec", total_elapsed);
+}
 
 
 void OctomapServer::publishAll(const ros::Time& rostime){

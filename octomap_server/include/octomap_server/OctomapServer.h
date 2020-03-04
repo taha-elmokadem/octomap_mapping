@@ -124,6 +124,7 @@ protected:
   void publishBinaryOctoMap(const ros::Time& rostime = ros::Time::now()) const;
   void publishFullOctoMap(const ros::Time& rostime = ros::Time::now()) const;
   virtual void publishAll(const ros::Time& rostime = ros::Time::now());
+  virtual void publishLocalMap(const ros::Time& rostime = ros::Time::now());
 
   void publishLocalPointCloud(const sensor_msgs::PointCloud2 &cloud);
 
