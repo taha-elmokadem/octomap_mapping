@@ -646,7 +646,7 @@ void OctomapServer::publishLocalMap(const ros::Time& rostime){
   }
 
   double total_elapsed1 = (ros::WallTime::now() - startTime).toSec();
-  ROS_INFO("Traversing all leafs in OctomapServer took %f sec", total_elapsed1);
+  ROS_DEBUG("Traversing all leafs in OctomapServer took %f sec", total_elapsed1);
 
   // call post-traversal hook:
   handlePostNodeTraversal(rostime);
@@ -678,7 +678,7 @@ void OctomapServer::publishLocalMap(const ros::Time& rostime){
   }
 
   total_elapsed1 = (ros::WallTime::now() - startTime).toSec();
-  ROS_INFO("after publishing markersArray in OctomapServer took %f sec", total_elapsed1);
+  ROS_DEBUG("after publishing markersArray in OctomapServer took %f sec", total_elapsed1);
 
   // finish pointcloud:
   if (publishPointCloud){
@@ -690,7 +690,7 @@ void OctomapServer::publishLocalMap(const ros::Time& rostime){
   }
 
   double total_elapsed = (ros::WallTime::now() - startTime).toSec();
-  ROS_INFO("Map publishing in OctomapServer took %f sec", total_elapsed);
+  ROS_DEBUG("Map publishing in OctomapServer took %f sec", total_elapsed);
 }
 
 
@@ -838,7 +838,7 @@ void OctomapServer::publishAll(const ros::Time& rostime){
   }
 
   double total_elapsed1 = (ros::WallTime::now() - startTime).toSec();
-  ROS_INFO("Traversing all leafs in OctomapServer took %f sec", total_elapsed1);
+  ROS_DEBUG("Traversing all leafs in OctomapServer took %f sec", total_elapsed1);
 
   // call post-traversal hook:
   handlePostNodeTraversal(rostime);
@@ -870,7 +870,7 @@ void OctomapServer::publishAll(const ros::Time& rostime){
   }
 
   total_elapsed1 = (ros::WallTime::now() - startTime).toSec();
-  ROS_INFO("after publishing markersArray in OctomapServer took %f sec", total_elapsed1);
+  ROS_DEBUG("after publishing markersArray in OctomapServer took %f sec", total_elapsed1);
 
 
   // finish FreeMarkerArray:
@@ -916,7 +916,7 @@ void OctomapServer::publishAll(const ros::Time& rostime){
 
 
   double total_elapsed = (ros::WallTime::now() - startTime).toSec();
-  ROS_INFO("Map publishing in OctomapServer took %f sec", total_elapsed);
+  ROS_DEBUG("Map publishing in OctomapServer took %f sec", total_elapsed);
 
 }
 
