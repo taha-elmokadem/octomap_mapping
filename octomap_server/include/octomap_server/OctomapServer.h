@@ -125,6 +125,8 @@ protected:
   void publishFullOctoMap(const ros::Time& rostime = ros::Time::now()) const;
   virtual void publishAll(const ros::Time& rostime = ros::Time::now());
 
+  void publishLocalPointCloud(const sensor_msgs::PointCloud2 &cloud);
+
   /**
   * @brief update occupancy map with a scan labeled as ground and nonground.
   * The scans should be in the global map frame.
@@ -200,7 +202,7 @@ protected:
   static std_msgs::ColorRGBA heightMapColor(double h);
   ros::NodeHandle m_nh;
   ros::NodeHandle m_nh_private;
-  ros::Publisher  m_markerPub, m_binaryMapPub, m_fullMapPub, m_pointCloudPub, m_collisionObjectPub, m_mapPub, m_cmapPub, m_fmapPub, m_fmarkerPub;
+  ros::Publisher  m_markerPub, m_binaryMapPub, m_fullMapPub, m_pointCloudPub, m_localPointCloudPub, m_collisionObjectPub, m_mapPub, m_cmapPub, m_fmapPub, m_fmarkerPub;
   message_filters::Subscriber<sensor_msgs::PointCloud2>* m_pointCloudSub;
   tf::MessageFilter<sensor_msgs::PointCloud2>* m_tfPointCloudSub;
   ros::ServiceServer m_octomapBinaryService, m_octomapFullService, m_clearBBXService, m_resetService;
@@ -227,6 +229,10 @@ protected:
   double m_res;
   unsigned m_treeDepth;
   unsigned m_maxTreeDepth;
+
+  double m_pointcloudXBox,
+         m_pointcloudYBox,
+         m_pointcloudZBox;
 
   double m_pointcloudMinX;
   double m_pointcloudMaxX;
@@ -258,6 +264,8 @@ protected:
   unsigned m_multires2DScale;
   bool m_projectCompleteMap;
   bool m_useColoredMap;
+
+  tf::StampedTransform sensorToWorldTf;
 };
 }
 

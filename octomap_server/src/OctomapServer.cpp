@@ -64,6 +64,9 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_pointcloudMaxZ(std::numeric_limits<double>::max()),
   m_occupancyMinZ(-std::numeric_limits<double>::max()),
   m_occupancyMaxZ(std::numeric_limits<double>::max()),
+  m_pointcloudXBox(10.0),
+  m_pointcloudYBox(10.0),
+  m_pointcloudZBox(10.0),
   m_minSizeX(0.0), m_minSizeY(0.0),
   m_filterSpeckles(false), m_filterGroundPlane(false),
   m_groundFilterDistance(0.04), m_groundFilterAngle(0.15), m_groundFilterPlaneDistance(0.07),
@@ -78,6 +81,10 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_nh_private.param("height_map", m_useHeightMap, m_useHeightMap);
   m_nh_private.param("colored_map", m_useColoredMap, m_useColoredMap);
   m_nh_private.param("color_factor", m_colorFactor, m_colorFactor);
+
+  m_nh_private.param("local_pointcloud_X_length", m_pointcloudXBox, m_pointcloudXBox);
+  m_nh_private.param("local_pointcloud_Y_length", m_pointcloudYBox, m_pointcloudYBox);
+  m_nh_private.param("local_pointcloud_Z_length", m_pointcloudZBox, m_pointcloudZBox);
 
   m_nh_private.param("pointcloud_min_x", m_pointcloudMinX,m_pointcloudMinX);
   m_nh_private.param("pointcloud_max_x", m_pointcloudMaxX,m_pointcloudMaxX);
@@ -169,6 +176,7 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_binaryMapPub = m_nh.advertise<Octomap>("octomap_binary", 1, m_latchedTopics);
   m_fullMapPub = m_nh.advertise<Octomap>("octomap_full", 1, m_latchedTopics);
   m_pointCloudPub = m_nh.advertise<sensor_msgs::PointCloud2>("octomap_point_cloud_centers", 1, m_latchedTopics);
+  m_localPointCloudPub = m_nh.advertise<sensor_msgs::PointCloud2>("octomap_point_cloud_centers_local", 1, m_latchedTopics);
   m_mapPub = m_nh.advertise<nav_msgs::OccupancyGrid>("projected_map", 5, m_latchedTopics);
   m_fmarkerPub = m_nh.advertise<visualization_msgs::MarkerArray>("free_cells_vis_array", 1, m_latchedTopics);
 
@@ -258,6 +266,38 @@ bool OctomapServer::openFile(const std::string& filename){
 
 }
 
+void OctomapServer::publishLocalPointCloud(const sensor_msgs::PointCloud2 &cloud){
+
+  PCLPointCloud pc; // input cloud for filtering and ground-detection
+  pcl::fromROSMsg(cloud, pc);
+
+  tf::Vector3 sensorPosition = sensorToWorldTf.getOrigin();
+
+  // set up filter for local box limits around robot position, also removes NANs:
+  pcl::PassThrough<PCLPoint> pass_x;
+  pass_x.setFilterFieldName("x");
+  pass_x.setFilterLimits(sensorPosition[0] - m_pointcloudXBox/2, sensorPosition[0] + m_pointcloudXBox/2);
+  pcl::PassThrough<PCLPoint> pass_y;
+  pass_y.setFilterFieldName("y");
+  pass_y.setFilterLimits(sensorPosition[1] - m_pointcloudYBox/2, sensorPosition[1] + m_pointcloudYBox/2);
+  pcl::PassThrough<PCLPoint> pass_z;
+  pass_z.setFilterFieldName("z");
+  pass_z.setFilterLimits(sensorPosition[2] - m_pointcloudZBox/2, sensorPosition[2] + m_pointcloudZBox/2);
+
+  pass_x.setInputCloud(pc.makeShared());
+  pass_x.filter(pc);
+  pass_y.setInputCloud(pc.makeShared());
+  pass_y.filter(pc);
+  pass_z.setInputCloud(pc.makeShared());
+  pass_z.filter(pc);
+
+  sensor_msgs::PointCloud2 cloud_out;
+  pcl::toROSMsg(pc, cloud_out);
+  cloud_out.header = cloud.header;
+  m_localPointCloudPub.publish(cloud_out);
+
+}
+
 void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& cloud){
   ros::WallTime startTime = ros::WallTime::now();
 
@@ -268,7 +308,7 @@ void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr
   PCLPointCloud pc; // input cloud for filtering and ground-detection
   pcl::fromROSMsg(*cloud, pc);
 
-  tf::StampedTransform sensorToWorldTf;
+  //tf::StampedTransform sensorToWorldTf; // defined in class header file
   try {
     m_tfListener.lookupTransform(m_worldFrameId, cloud->header.frame_id, cloud->header.stamp, sensorToWorldTf);
   } catch(tf::TransformException& ex){
@@ -686,6 +726,7 @@ void OctomapServer::publishAll(const ros::Time& rostime){
     cloud.header.frame_id = m_worldFrameId;
     cloud.header.stamp = rostime;
     m_pointCloudPub.publish(cloud);
+    this->publishLocalPointCloud(cloud);
   }
 
   if (publishBinaryMap)

@@ -1,1 +1,18 @@
-# Empty file to load default parameters.
+# file to load default parameters.
+resolution: 0.05
+  
+frame_id: 'map'
+base_frame_id: 'base_link'
+
+sensor_model/max_range: 3.0
+
+cloud_in: '/camera/voxel_grid/output'
+
+filter_ground: false
+
+color/r: 1.0
+color/g: 0.0
+color/b: 0.0
+color/a: 1.0
+
+latch: false

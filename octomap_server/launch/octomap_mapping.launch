@@ -7,17 +7,47 @@
   www.ros.org/wiki/octomap_server for details  
 -->
 <launch>
-	<node pkg="octomap_server" type="octomap_server_node" name="octomap_server">
-		<param name="resolution" value="0.05" />
+	<arg name="resolution"     default="0.05" />
+	<arg name="frame_id"       default="map" />
+	<arg name="base_frame_id"  default="base_link" />
+	<arg name="max_range"      default="3.0" />
+	<arg name="cloud_in"       default="/camera/voxel_grid/output" />
+
+	<arg name="filter_ground"  default="false" />
+
+	<!-- occupied cells color -->
+	<arg name="color_r"  default="1.0" />
+	<arg name="color_g"  default="0.0" />
+	<arg name="color_b"  default="0.0" />
+	<arg name="color_a"  default="1.0" />
+
+	<arg name="latch"  default="false" />
+	
+	
+
+	<node pkg="octomap_server" type="octomap_server_node" name="octomap_server" output="screen">
+		<param name="resolution" value="$(arg resolution)" />
 		
 		<!-- fixed map frame (set to 'map' if SLAM or localization running!) -->
-		<param name="frame_id" type="string" value="odom_combined" />
+		<param name="frame_id" type="string" value="$(arg frame_id)" />
+
+		<param name="base_frame_id" type="string" value="$(arg base_frame_id)" />
 		
 		<!-- maximum range to integrate (speedup!) -->
-		<param name="sensor_model/max_range" value="5.0" />
+		<param name="sensor_model/max_range" value="$(arg max_range)" />
 		
 		<!-- data source to integrate (PointCloud2) -->
-		<remap from="cloud_in" to="/narrow_stereo/points_filtered2" />
-	
+		<remap from="cloud_in" to="$(arg cloud_in)" />
+
+		<param name="filter_ground" value="$(arg filter_ground)" />
+
+		<!-- occupied cells color -->
+		<param name="color/r" value="$(arg color_r)" />
+		<param name="color/g" value="$(arg color_g)" />
+		<param name="color/b" value="$(arg color_b)" />
+		<param name="color/a" value="$(arg color_a)" />
+
+		<param name="latch" value="$(arg latch)" />
+
 	</node>
 </launch>
