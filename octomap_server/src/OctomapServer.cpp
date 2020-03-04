@@ -184,7 +184,7 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_tfPointCloudSub = new tf::MessageFilter<sensor_msgs::PointCloud2> (*m_pointCloudSub, m_tfListener, m_worldFrameId, 5);
   m_tfPointCloudSub->registerCallback(boost::bind(&OctomapServer::insertCloudCallback, this, _1));
 
-  publish_all_timer = m_nh.createTimer(ros::Duration(1.0), &OctomapServer::publish_all_timer_cb, this, true, false);
+  publish_all_timer = m_nh.createTimer(ros::Duration(1.0), &OctomapServer::publish_all_timer_cb, this, false, false);
   publish_all_timer.start();
 
   m_octomapBinaryService = m_nh.advertiseService("octomap_binary", &OctomapServer::octomapBinarySrv, this);
