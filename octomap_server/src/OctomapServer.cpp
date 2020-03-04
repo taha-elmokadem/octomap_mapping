@@ -529,12 +529,12 @@ void OctomapServer::publishAll(const ros::Time& rostime){
     return;
   }
 
-  bool publishFreeMarkerArray = m_publishFreeSpace && (m_latchedTopics || m_fmarkerPub.getNumSubscribers() > 0);
-  bool publishMarkerArray = (m_latchedTopics || m_markerPub.getNumSubscribers() > 0);
-  bool publishPointCloud = (m_latchedTopics || m_pointCloudPub.getNumSubscribers() > 0);
-  bool publishBinaryMap = (m_latchedTopics || m_binaryMapPub.getNumSubscribers() > 0);
-  bool publishFullMap = (m_latchedTopics || m_fullMapPub.getNumSubscribers() > 0);
-  m_publish2DMap = (m_latchedTopics || m_mapPub.getNumSubscribers() > 0);
+  bool publishFreeMarkerArray = false; //m_publishFreeSpace && (m_latchedTopics || m_fmarkerPub.getNumSubscribers() > 0);
+  bool publishMarkerArray = true; //(m_latchedTopics || m_markerPub.getNumSubscribers() > 0);
+  bool publishPointCloud = true; //(m_latchedTopics || m_pointCloudPub.getNumSubscribers() > 0);
+  bool publishBinaryMap = false; //(m_latchedTopics || m_binaryMapPub.getNumSubscribers() > 0);
+  bool publishFullMap = false; //(m_latchedTopics || m_fullMapPub.getNumSubscribers() > 0);
+  m_publish2DMap = false; //(m_latchedTopics || m_mapPub.getNumSubscribers() > 0);
 
   // init markers for free space:
   visualization_msgs::MarkerArray freeNodesVis;
