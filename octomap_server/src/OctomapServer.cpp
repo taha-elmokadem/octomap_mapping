@@ -184,6 +184,9 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_tfPointCloudSub = new tf::MessageFilter<sensor_msgs::PointCloud2> (*m_pointCloudSub, m_tfListener, m_worldFrameId, 5);
   m_tfPointCloudSub->registerCallback(boost::bind(&OctomapServer::insertCloudCallback, this, _1));
 
+  publish_all_timer = m_nh.createTimer(ros::Duration(1.0), &OctomapServer::publish_all_timer_cb, this, true, false);
+  publish_all_timer.start();
+
   m_octomapBinaryService = m_nh.advertiseService("octomap_binary", &OctomapServer::octomapBinarySrv, this);
   m_octomapFullService = m_nh.advertiseService("octomap_full", &OctomapServer::octomapFullSrv, this);
   m_clearBBXService = m_nh_private.advertiseService("clear_bbx", &OctomapServer::clearBBXSrv, this);
@@ -298,6 +301,10 @@ void OctomapServer::publishLocalPointCloud(const sensor_msgs::PointCloud2 &cloud
 
 }
 
+void OctomapServer::publish_all_timer_cb(const ros::TimerEvent& e) {
+  publishAll(cloud_stamp);
+}
+
 void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& cloud){
   ros::WallTime startTime = ros::WallTime::now();
 
@@ -391,6 +398,8 @@ void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr
 
   //publishAll(cloud->header.stamp);
   publishLocalMap(cloud->header.stamp);
+
+  cloud_stamp = cloud->header.stamp;
 }
 
 void OctomapServer::insertScan(const tf::Point& sensorOriginTf, const PCLPointCloud& ground, const PCLPointCloud& nonground){
@@ -528,7 +537,7 @@ void OctomapServer::publishLocalMap(const ros::Time& rostime){
     return;
   }
 
-  bool publishMarkerArray = true;
+  bool publishMarkerArray = false;
   bool publishPointCloud  = true;
 
   // init markers:
@@ -677,8 +686,7 @@ void OctomapServer::publishLocalMap(const ros::Time& rostime){
     pcl::toROSMsg (pclCloud, cloud);
     cloud.header.frame_id = m_worldFrameId;
     cloud.header.stamp = rostime;
-    m_pointCloudPub.publish(cloud);
-    this->publishLocalPointCloud(cloud);
+    m_localPointCloudPub.publish(cloud);
   }
 
   double total_elapsed = (ros::WallTime::now() - startTime).toSec();
@@ -695,12 +703,12 @@ void OctomapServer::publishAll(const ros::Time& rostime){
     return;
   }
 
-  bool publishFreeMarkerArray = false; //m_publishFreeSpace && (m_latchedTopics || m_fmarkerPub.getNumSubscribers() > 0);
-  bool publishMarkerArray = true; //(m_latchedTopics || m_markerPub.getNumSubscribers() > 0);
-  bool publishPointCloud = true; //(m_latchedTopics || m_pointCloudPub.getNumSubscribers() > 0);
-  bool publishBinaryMap = false; //(m_latchedTopics || m_binaryMapPub.getNumSubscribers() > 0);
-  bool publishFullMap = false; //(m_latchedTopics || m_fullMapPub.getNumSubscribers() > 0);
-  m_publish2DMap = false; //(m_latchedTopics || m_mapPub.getNumSubscribers() > 0);
+  bool publishFreeMarkerArray = m_publishFreeSpace && (m_latchedTopics || m_fmarkerPub.getNumSubscribers() > 0);
+  bool publishMarkerArray = (m_latchedTopics || m_markerPub.getNumSubscribers() > 0);
+  bool publishPointCloud = (m_latchedTopics || m_pointCloudPub.getNumSubscribers() > 0);
+  bool publishBinaryMap = (m_latchedTopics || m_binaryMapPub.getNumSubscribers() > 0);
+  bool publishFullMap = (m_latchedTopics || m_fullMapPub.getNumSubscribers() > 0);
+  m_publish2DMap = (m_latchedTopics || m_mapPub.getNumSubscribers() > 0);
 
   // init markers for free space:
   visualization_msgs::MarkerArray freeNodesVis;
@@ -898,7 +906,6 @@ void OctomapServer::publishAll(const ros::Time& rostime){
     cloud.header.frame_id = m_worldFrameId;
     cloud.header.stamp = rostime;
     m_pointCloudPub.publish(cloud);
-    this->publishLocalPointCloud(cloud);
   }
 
   if (publishBinaryMap)

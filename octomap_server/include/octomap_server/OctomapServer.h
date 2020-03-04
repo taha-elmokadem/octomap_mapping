@@ -125,6 +125,7 @@ protected:
   void publishFullOctoMap(const ros::Time& rostime = ros::Time::now()) const;
   virtual void publishAll(const ros::Time& rostime = ros::Time::now());
   virtual void publishLocalMap(const ros::Time& rostime = ros::Time::now());
+  void publish_all_timer_cb(const ros::TimerEvent& e);
 
   void publishLocalPointCloud(const sensor_msgs::PointCloud2 &cloud);
 
@@ -210,6 +211,10 @@ protected:
   tf::TransformListener m_tfListener;
   boost::recursive_mutex m_config_mutex;
   dynamic_reconfigure::Server<OctomapServerConfig> m_reconfigureServer;
+
+  // a ros timer to publish all maps
+  ros::Timer publish_all_timer;
+  ros::Time cloud_stamp;
 
   OcTreeT* m_octree;
   octomap::KeyRay m_keyRay;  // temp storage for ray casting
