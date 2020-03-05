@@ -171,6 +171,7 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
 
   m_markerPub = m_nh.advertise<visualization_msgs::MarkerArray>("occupied_cells_vis_array", 1, m_latchedTopics);
   m_FOVmarkerPub = m_nh.advertise<visualization_msgs::MarkerArray>("FOV_occupied_cells_vis_array", 1, m_latchedTopics);
+  m_CenterlineMarkerPub = m_nh.advertise<visualization_msgs::MarkerArray>("centerline_points_vis_array", 1, m_latchedTopics);
   m_binaryMapPub = m_nh.advertise<Octomap>("octomap_binary", 1, m_latchedTopics);
   m_fullMapPub = m_nh.advertise<Octomap>("octomap_full", 1, m_latchedTopics);
   m_pointCloudPub = m_nh.advertise<sensor_msgs::PointCloud2>("octomap_point_cloud_centers", 1, m_latchedTopics);
@@ -554,6 +555,9 @@ void OctomapServer::computeClosestPoint() {
   // each array stores all cubes of a different size, one for each depth level:
   FOVoccupiedNodesVis.markers.resize(m_treeDepth+1);
 
+  double dist_min = m_maxRange;
+  tf::Vector3 p_min;
+
   // now, traverse leafs in a bounding box in the tree (local map):
   for (OcTreeT::leaf_bbx_iterator it = m_octree->begin_leafs_bbx(min,max),
       end = m_octree->end_leafs_bbx(); it != end; ++it) {
@@ -568,6 +572,11 @@ void OctomapServer::computeClosestPoint() {
 
           // get the direction vector
           tf::Vector3 d = tf::Vector3(x, y, z) - sensorPosition; //  	.normalized() 
+          double d_norm = this->norm(d);
+          if (d_norm < dist_min) {
+            dist_min = d_norm;
+            p_min = tf::Vector3(x, y, z);
+          }
           d.normalize();
 
           // get dot product
@@ -614,11 +623,13 @@ void OctomapServer::computeClosestPoint() {
         
   }
 
+  this->computePointsAndCentroids(p_min, sensorPosition, directionVector);
+
   // finish MarkerArray:
   if (publishMarkerArray){
+    
     for (unsigned i= 0; i < FOVoccupiedNodesVis.markers.size(); ++i){
       double size = m_octree->getNodeSize(i);
-
       FOVoccupiedNodesVis.markers[i].header.frame_id = m_worldFrameId;
       FOVoccupiedNodesVis.markers[i].header.stamp = cloud_stamp;
       FOVoccupiedNodesVis.markers[i].ns = "map";
@@ -640,6 +651,86 @@ void OctomapServer::computeClosestPoint() {
     m_FOVmarkerPub.publish(FOVoccupiedNodesVis);
   }
 
+}
+
+void OctomapServer::computePointsAndCentroids(const tf::Vector3 &p_min, const tf::Vector3 &sensorPosition, const tf::Vector3 &v_heading) {
+  
+  visualization_msgs::MarkerArray CenterlinePointsVis;
+  CenterlinePointsVis.markers.push_back(createSphereMarker(0, p_min));
+
+  // ray towards closest point
+  tf::Vector3 i_d = p_min; 
+  i_d.normalize();
+
+  // get plane normal giving that the heading of the vehicle is ahead which is [0,0,1] in the camera's optical frame
+  tf::Vector3 i_n = v_heading.cross(i_d);  // plane normal
+  i_n.normalize();
+  double alpha = acos(v_heading.dot(i_d));  // angle between heading and i_d
+
+  // 4. get the remaining points
+  // set of anles that can be used to rotate i_d to get the other 3 rays
+  std::vector<double> angs {-2*alpha, -alpha/3, -2*alpha+alpha/3};
+
+  //std::vector<tf::Vector3> pts;
+  // compute the 3 points on the projected rays
+  for (int k = 0; k < 3; k++) {
+      tf::Vector3 ray = this->rotate_about_vector(i_d, i_n, angs[k]);
+      tf::Vector3 pt = sensorPosition + 2.0 * ray;
+      point3d p;
+      bool check_pt = m_octree->castRay(point3d(sensorPosition[0], sensorPosition[1], sensorPosition[2]), point3d(ray[0], ray[1], ray[2]), p, true);
+      if (check_pt) {
+        pt = tf::Vector3(p.x(), p.y(), p.z());
+      }
+      double r = 255.0;
+      if (k == 0)
+        r = 0.0;
+      CenterlinePointsVis.markers.push_back(createSphereMarker(k+1, pt, "edges_points", r, 255.0, 0.0));
+      /*
+      point3d p;
+      bool check_pt = m_octree->castRay(point3d(sensorPosition[0], sensorPosition[1], sensorPosition[2]), point3d(ray[0], ray[1], ray[2]), p, true);
+      if (check_pt) {
+        tf::Vector3 pt(p.x(), p.y(), p.z());
+        CenterlinePointsVis.markers.push_back(createSphereMarker(k+1, pt));
+      }
+      */
+      //pts.push_back(pt);
+  }
+
+  m_CenterlineMarkerPub.publish(CenterlinePointsVis);
+  
+}
+
+tf::Vector3 OctomapServer::rotate_about_vector(const tf::Vector3 &v,
+                                    const tf::Vector3 &i_n,
+                                    const double &ang) {
+
+    return v * cos(ang) + i_n.cross(v)*sin(ang) + i_n * i_n.dot(v) * (1-cos(ang));
+}
+
+double OctomapServer::norm(const tf::Vector3 &v) {
+  return sqrt(pow(v[0], 2) + pow(v[1], 2) + pow(v[2], 2));
+}
+
+visualization_msgs::Marker OctomapServer::createSphereMarker(int id, const tf::Vector3 &pos, std::string ns, const double &r, const double &g, const double &b, const double &size) {
+  // closest point marker
+  visualization_msgs::Marker m;
+  m.header.frame_id = m_worldFrameId;
+  m.header.stamp = cloud_stamp;
+  m.ns = ns;
+  m.id = id;
+  m.type = visualization_msgs::Marker::SPHERE;
+  m.scale.x = size;
+  m.scale.y = size;
+  m.scale.z = size;
+  geometry_msgs::Pose center;
+  center.position.x = pos[0];
+  center.position.y = pos[1];
+  center.position.z = pos[2];
+  m.pose = center;
+
+  std_msgs::ColorRGBA _color; _color.r = (r / 255.); _color.g = (g / 255.); _color.b = (b / 255.); _color.a = 1.0;
+  m.color = _color;
+  return m;
 }
 
 void OctomapServer::publishLocalMap(const ros::Time& rostime){

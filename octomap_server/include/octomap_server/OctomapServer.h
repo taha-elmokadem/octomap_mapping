@@ -129,6 +129,12 @@ protected:
 
   void publishLocalPointCloud(const sensor_msgs::PointCloud2 &cloud);
   void computeClosestPoint();
+  void computePointsAndCentroids(const tf::Vector3 &p_min, const tf::Vector3 &sensorPosition, const tf::Vector3 &directionVector);
+  visualization_msgs::Marker createSphereMarker(int id, const tf::Vector3 &pos, std::string ns = "closest_point", const double &r = 255.0, const double &g = 0.0, const double &b = 0.0, const double &size = 0.1);
+  double norm(const tf::Vector3 &v);
+  tf::Vector3 rotate_about_vector(const tf::Vector3 &v,
+                                    const tf::Vector3 &i_n,
+                                    const double &ang);
 
   /**
   * @brief update occupancy map with a scan labeled as ground and nonground.
@@ -208,7 +214,7 @@ protected:
   ros::Publisher  m_markerPub, m_binaryMapPub, m_fullMapPub,
                   m_pointCloudPub, m_localPointCloudPub, m_collisionObjectPub,
                   m_mapPub, m_cmapPub, m_fmapPub, m_fmarkerPub,
-                  m_FOVmarkerPub;
+                  m_FOVmarkerPub, m_CenterlineMarkerPub;
   message_filters::Subscriber<sensor_msgs::PointCloud2>* m_pointCloudSub;
   tf::MessageFilter<sensor_msgs::PointCloud2>* m_tfPointCloudSub;
   ros::ServiceServer m_octomapBinaryService, m_octomapFullService, m_clearBBXService, m_resetService;
