@@ -570,12 +570,13 @@ void OctomapServer::computeClosestPoint() {
           d.normalize();
 
           // get dot product
-          double ang = d.dot(directionVector);
-
+          double cos_ang = d.dot(directionVector);
+          ROS_INFO_THROTTLE(1.0, "current directio vector is (%f, %f, %f)", directionVector[0], directionVector[1], directionVector[2]);
+          ROS_INFO_THROTTLE(1.0, "ang from (%f, %f, %f) to (%f, %f, %f) is %f", sensorPosition[0], sensorPosition[1], sensorPosition[2], x,y,z, acos(cos_ang));
           ROS_INFO_THROTTLE(1.0, "direction from (%f, %f, %f) to (%f, %f, %f) is (%f, %f, %f)", sensorPosition[0], sensorPosition[1], sensorPosition[2], x,y,z, d[0], d[1], d[2]);
 
           // TODO: add a paramter to make FOV variable instead of PI
-          if (acos(ang) < PI) {
+          if (acos(cos_ang) < PI) {
             //create marker:
             if (publishMarkerArray){
               unsigned idx = it.getDepth();
