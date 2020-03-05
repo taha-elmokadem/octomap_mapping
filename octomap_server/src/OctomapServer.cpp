@@ -534,8 +534,8 @@ void OctomapServer::computeClosestPoint() {
   bool publishMarkerArray = true;
 
   // get current position and orientation
-  tf::Vector3    sensorPosition    = baseToWorldTf.getOrigin();
-  tf::Quaternion sensorOrientation = baseToWorldTf.getRotation();
+  tf::Vector3    sensorPosition    = sensorToWorldTf.getOrigin();
+  tf::Quaternion sensorOrientation = sensorToWorldTf.getRotation();
   sensorOrientation.normalize();
 
   tf::Vector3 vector(1, 0, 0);
@@ -572,7 +572,7 @@ void OctomapServer::computeClosestPoint() {
 
           // get dot product
           double cos_ang = d.dot(directionVector);
-          ROS_INFO_THROTTLE(1.0, "current directio vector is (%f, %f, %f)", directionVector[0], directionVector[1], directionVector[2]);
+          ROS_INFO_THROTTLE(1.0, "current direction vector is (%f, %f, %f)", directionVector[0], directionVector[1], directionVector[2]);
           ROS_INFO_THROTTLE(1.0, "ang from (%f, %f, %f) to (%f, %f, %f) is %f", sensorPosition[0], sensorPosition[1], sensorPosition[2], x,y,z, acos(cos_ang));
           ROS_INFO_THROTTLE(1.0, "direction from (%f, %f, %f) to (%f, %f, %f) is (%f, %f, %f)", sensorPosition[0], sensorPosition[1], sensorPosition[2], x,y,z, d[0], d[1], d[2]);
 
