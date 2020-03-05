@@ -577,7 +577,7 @@ void OctomapServer::computeClosestPoint() {
           ROS_INFO_THROTTLE(1.0, "direction from (%f, %f, %f) to (%f, %f, %f) is (%f, %f, %f)", sensorPosition[0], sensorPosition[1], sensorPosition[2], x,y,z, d[0], d[1], d[2]);
 
           // TODO: add a paramter to make FOV variable instead of PI
-          if (abs(acos(cos_ang)) < PI) {
+          if (abs(acos(cos_ang)) <= PI/2 - PI/18) {
             //create marker:
             if (publishMarkerArray){
               unsigned idx = it.getDepth();
