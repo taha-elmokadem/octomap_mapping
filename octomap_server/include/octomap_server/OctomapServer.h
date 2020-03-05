@@ -128,6 +128,7 @@ protected:
   void publish_all_timer_cb(const ros::TimerEvent& e);
 
   void publishLocalPointCloud(const sensor_msgs::PointCloud2 &cloud);
+  void computeClosestPoint();
 
   /**
   * @brief update occupancy map with a scan labeled as ground and nonground.
@@ -204,7 +205,10 @@ protected:
   static std_msgs::ColorRGBA heightMapColor(double h);
   ros::NodeHandle m_nh;
   ros::NodeHandle m_nh_private;
-  ros::Publisher  m_markerPub, m_binaryMapPub, m_fullMapPub, m_pointCloudPub, m_localPointCloudPub, m_collisionObjectPub, m_mapPub, m_cmapPub, m_fmapPub, m_fmarkerPub;
+  ros::Publisher  m_markerPub, m_binaryMapPub, m_fullMapPub,
+                  m_pointCloudPub, m_localPointCloudPub, m_collisionObjectPub,
+                  m_mapPub, m_cmapPub, m_fmapPub, m_fmarkerPub,
+                  m_FOVmarkerPub;
   message_filters::Subscriber<sensor_msgs::PointCloud2>* m_pointCloudSub;
   tf::MessageFilter<sensor_msgs::PointCloud2>* m_tfPointCloudSub;
   ros::ServiceServer m_octomapBinaryService, m_octomapFullService, m_clearBBXService, m_resetService;
@@ -271,7 +275,9 @@ protected:
   bool m_projectCompleteMap;
   bool m_useColoredMap;
 
-  tf::StampedTransform sensorToWorldTf;
+  tf::StampedTransform sensorToWorldTf, sensorToBaseTf, baseToWorldTf;
+
+  const double PI = 3.14;
 };
 }
 

@@ -32,15 +32,13 @@
 using namespace octomap;
 using octomap_msgs::Octomap;
 
-bool is_equal (double a, double b, double epsilon = 1.0e-7)
-{
+bool is_equal (double a, double b, double epsilon = 1.0e-7) {
     return std::abs(a - b) < epsilon;
 }
 
 namespace octomap_server{
 
-OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeHandle &nh_)
-: m_nh(nh_),
+OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeHandle &nh_) : m_nh(nh_),
   m_nh_private(private_nh_),
   m_pointCloudSub(NULL),
   m_tfPointCloudSub(NULL),
@@ -72,8 +70,7 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_groundFilterDistance(0.04), m_groundFilterAngle(0.15), m_groundFilterPlaneDistance(0.07),
   m_compressMap(true),
   m_incrementalUpdate(false),
-  m_initConfig(true)
-{
+  m_initConfig(true) {
   double probHit, probMiss, thresMin, thresMax;
 
   m_nh_private.param("frame_id", m_worldFrameId, m_worldFrameId);
@@ -128,11 +125,11 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   }
 
   if (m_useColoredMap) {
-#ifdef COLOR_OCTOMAP_SERVER
-    ROS_INFO_STREAM("Using RGB color registration (if information available)");
-#else
-    ROS_ERROR_STREAM("Colored map requested in launch file - node not running/compiled to support colors, please define COLOR_OCTOMAP_SERVER and recompile or launch the octomap_color_server node");
-#endif
+  #ifdef COLOR_OCTOMAP_SERVER
+      ROS_INFO_STREAM("Using RGB color registration (if information available)");
+  #else
+      ROS_ERROR_STREAM("Colored map requested in launch file - node not running/compiled to support colors, please define COLOR_OCTOMAP_SERVER and recompile or launch the octomap_color_server node");
+  #endif
   }
 
   // initialize octomap object & params
@@ -173,6 +170,7 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
     ROS_INFO("Publishing non-latched (topics are only prepared as needed, will only be re-published on map change");
 
   m_markerPub = m_nh.advertise<visualization_msgs::MarkerArray>("occupied_cells_vis_array", 1, m_latchedTopics);
+  m_FOVmarkerPub = m_nh.advertise<visualization_msgs::MarkerArray>("FOV_occupied_cells_vis_array", 1, m_latchedTopics);
   m_binaryMapPub = m_nh.advertise<Octomap>("octomap_binary", 1, m_latchedTopics);
   m_fullMapPub = m_nh.advertise<Octomap>("octomap_full", 1, m_latchedTopics);
   m_pointCloudPub = m_nh.advertise<sensor_msgs::PointCloud2>("octomap_point_cloud_centers", 1, m_latchedTopics);
@@ -269,6 +267,7 @@ bool OctomapServer::openFile(const std::string& filename){
 
 }
 
+// not used, a faster implementation is used by searching the octree right away
 void OctomapServer::publishLocalPointCloud(const sensor_msgs::PointCloud2 &cloud){
 
   PCLPointCloud pc; // input cloud for filtering and ground-detection
@@ -342,7 +341,6 @@ void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr
   PCLPointCloud pc_nonground; // everything else
 
   if (m_filterGroundPlane){
-    tf::StampedTransform sensorToBaseTf, baseToWorldTf;
     try{
       m_tfListener.waitForTransform(m_baseFrameId, cloud->header.frame_id, cloud->header.stamp, ros::Duration(0.2));
       m_tfListener.lookupTransform(m_baseFrameId, cloud->header.frame_id, cloud->header.stamp, sensorToBaseTf);
@@ -400,6 +398,9 @@ void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr
   publishLocalMap(cloud->header.stamp);
 
   cloud_stamp = cloud->header.stamp;
+
+  // 
+  computeClosestPoint();
 }
 
 void OctomapServer::insertScan(const tf::Point& sensorOriginTf, const PCLPointCloud& ground, const PCLPointCloud& nonground){
@@ -411,9 +412,9 @@ void OctomapServer::insertScan(const tf::Point& sensorOriginTf, const PCLPointCl
     ROS_ERROR_STREAM("Could not generate Key for origin "<<sensorOrigin);
   }
 
-#ifdef COLOR_OCTOMAP_SERVER
-  unsigned char* colors = new unsigned char[3];
-#endif
+  #ifdef COLOR_OCTOMAP_SERVER
+    unsigned char* colors = new unsigned char[3];
+  #endif
 
   // instead of direct scan insertion, compute update to filter ground:
   KeySet free_cells, occupied_cells;
@@ -457,9 +458,9 @@ void OctomapServer::insertScan(const tf::Point& sensorOriginTf, const PCLPointCl
         updateMinKey(key, m_updateBBXMin);
         updateMaxKey(key, m_updateBBXMax);
 
-#ifdef COLOR_OCTOMAP_SERVER // NB: Only read and interpret color if it's an occupied node
-        m_octree->averageNodeColor(it->x, it->y, it->z, /*r=*/it->r, /*g=*/it->g, /*b=*/it->b);
-#endif
+  #ifdef COLOR_OCTOMAP_SERVER // NB: Only read and interpret color if it's an occupied node
+          m_octree->averageNodeColor(it->x, it->y, it->z, /*r=*/it->r, /*g=*/it->g, /*b=*/it->b);
+  #endif
       }
     } else {// ray longer than maxrange:;
       point3d new_end = sensorOrigin + (point - sensorOrigin).normalized() * m_maxRange;
@@ -499,16 +500,16 @@ void OctomapServer::insertScan(const tf::Point& sensorOriginTf, const PCLPointCl
   ROS_DEBUG_STREAM("Bounding box keys (before): " << m_updateBBXMin[0] << " " <<m_updateBBXMin[1] << " " << m_updateBBXMin[2] << " / " <<m_updateBBXMax[0] << " "<<m_updateBBXMax[1] << " "<< m_updateBBXMax[2]);
 
   // TODO: snap max / min keys to larger voxels by m_maxTreeDepth
-//   if (m_maxTreeDepth < 16)
-//   {
-//      OcTreeKey tmpMin = getIndexKey(m_updateBBXMin, m_maxTreeDepth); // this should give us the first key at depth m_maxTreeDepth that is smaller or equal to m_updateBBXMin (i.e. lower left in 2D grid coordinates)
-//      OcTreeKey tmpMax = getIndexKey(m_updateBBXMax, m_maxTreeDepth); // see above, now add something to find upper right
-//      tmpMax[0]+= m_octree->getNodeSize( m_maxTreeDepth ) - 1;
-//      tmpMax[1]+= m_octree->getNodeSize( m_maxTreeDepth ) - 1;
-//      tmpMax[2]+= m_octree->getNodeSize( m_maxTreeDepth ) - 1;
-//      m_updateBBXMin = tmpMin;
-//      m_updateBBXMax = tmpMax;
-//   }
+  //   if (m_maxTreeDepth < 16)
+  //   {
+  //      OcTreeKey tmpMin = getIndexKey(m_updateBBXMin, m_maxTreeDepth); // this should give us the first key at depth m_maxTreeDepth that is smaller or equal to m_updateBBXMin (i.e. lower left in 2D grid coordinates)
+  //      OcTreeKey tmpMax = getIndexKey(m_updateBBXMax, m_maxTreeDepth); // see above, now add something to find upper right
+  //      tmpMax[0]+= m_octree->getNodeSize( m_maxTreeDepth ) - 1;
+  //      tmpMax[1]+= m_octree->getNodeSize( m_maxTreeDepth ) - 1;
+  //      tmpMax[2]+= m_octree->getNodeSize( m_maxTreeDepth ) - 1;
+  //      m_updateBBXMin = tmpMin;
+  //      m_updateBBXMax = tmpMax;
+  //   }
 
   // TODO: we could also limit the bbx to be within the map bounds here (see publishing check)
   minPt = m_octree->keyToCoord(m_updateBBXMin);
@@ -519,13 +520,122 @@ void OctomapServer::insertScan(const tf::Point& sensorOriginTf, const PCLPointCl
   if (m_compressMap)
     m_octree->prune();
 
-#ifdef COLOR_OCTOMAP_SERVER
-  if (colors)
-  {
-    delete[] colors;
-    colors = NULL;
+  #ifdef COLOR_OCTOMAP_SERVER
+    if (colors)
+    {
+      delete[] colors;
+      colors = NULL;
+    }
+  #endif
+}
+
+void OctomapServer::computeClosestPoint() {
+
+  bool publishMarkerArray = true;
+
+  // get current position and orientation
+  tf::Vector3    sensorPosition    = baseToWorldTf.getOrigin();
+  tf::Quaternion sensorOrientation = baseToWorldTf.getRotation();
+
+  tf::Vector3 vector(1, 0, 0);
+  tf::Vector3 directionVector = tf::quatRotate(sensorOrientation, vector);
+
+  // define bounding box around robot
+  point3d min = point3d(sensorPosition[0] - m_pointcloudXBox/2,
+                        sensorPosition[1] - m_pointcloudYBox/2,
+                        sensorPosition[2] - m_pointcloudZBox/2);
+  point3d max = point3d(sensorPosition[0] + m_pointcloudXBox/2,
+                        sensorPosition[1] + m_pointcloudYBox/2,
+                        sensorPosition[2] + m_pointcloudZBox/2);
+
+  // init markers:
+  visualization_msgs::MarkerArray FOVoccupiedNodesVis;
+  // each array stores all cubes of a different size, one for each depth level:
+  FOVoccupiedNodesVis.markers.resize(m_treeDepth+1);
+
+  // now, traverse leafs in a bounding box in the tree (local map):
+  for (OcTreeT::leaf_bbx_iterator it = m_octree->begin_leafs_bbx(min,max),
+      end = m_octree->end_leafs_bbx(); it != end; ++it) {
+      
+      // do calculations for occupied nodes only
+      if (m_octree->isNodeOccupied(*it)) {
+        double z = it.getZ();
+        double half_size = it.getSize() / 2.0;
+        if (z + half_size > m_occupancyMinZ && z - half_size < m_occupancyMaxZ) {
+          double x = it.getX();
+          double y = it.getY();
+
+          // get the direction vector
+          tf::Vector3 d = tf::Vector3(x, y, z) - sensorPosition; //  	.normalized() 
+          d.normalize();
+
+          // get dot product
+          double ang = d.dot(directionVector);
+
+          // TODO: add a paramter to make FOV variable instead of PI
+          if (acos(ang) < PI) {
+            //create marker:
+            if (publishMarkerArray){
+              unsigned idx = it.getDepth();
+              assert(idx < FOVoccupiedNodesVis.markers.size());
+
+              geometry_msgs::Point cubeCenter;
+              cubeCenter.x = x;
+              cubeCenter.y = y;
+              cubeCenter.z = z;
+
+              FOVoccupiedNodesVis.markers[idx].points.push_back(cubeCenter);
+              if (m_useHeightMap){
+                double minX, minY, minZ, maxX, maxY, maxZ;
+                m_octree->getMetricMin(minX, minY, minZ);
+                m_octree->getMetricMax(maxX, maxY, maxZ);
+
+                double h = (1.0 - std::min(std::max((cubeCenter.z-minZ)/ (maxZ - minZ), 0.0), 1.0)) *m_colorFactor;
+                FOVoccupiedNodesVis.markers[idx].colors.push_back(heightMapColor(h));
+              }
+
+              #ifdef COLOR_OCTOMAP_SERVER
+                int r = it->getColor().r;
+                int g = it->getColor().g;
+                int b = it->getColor().b;
+                if (m_useColoredMap) {
+                  std_msgs::ColorRGBA _color; _color.r = (r / 255.); _color.g = (g / 255.); _color.b = (b / 255.); _color.a = 1.0; // TODO/EVALUATE: potentially use occupancy as measure for alpha channel?
+                  FOVoccupiedNodesVis.markers[idx].colors.push_back(_color);
+                }
+              #endif
+            }
+          }
+        }
+      }
+        
   }
-#endif
+
+  // finish MarkerArray:
+  if (publishMarkerArray){
+    for (unsigned i= 0; i < FOVoccupiedNodesVis.markers.size(); ++i){
+      double size = m_octree->getNodeSize(i);
+
+      FOVoccupiedNodesVis.markers[i].header.frame_id = m_worldFrameId;
+      FOVoccupiedNodesVis.markers[i].header.stamp = cloud_stamp;
+      FOVoccupiedNodesVis.markers[i].ns = "map";
+      FOVoccupiedNodesVis.markers[i].id = i;
+      FOVoccupiedNodesVis.markers[i].type = visualization_msgs::Marker::CUBE_LIST;
+      FOVoccupiedNodesVis.markers[i].scale.x = size;
+      FOVoccupiedNodesVis.markers[i].scale.y = size;
+      FOVoccupiedNodesVis.markers[i].scale.z = size;
+      if (!m_useColoredMap)
+        FOVoccupiedNodesVis.markers[i].color = m_color;
+
+
+      if (FOVoccupiedNodesVis.markers[i].points.size() > 0)
+        FOVoccupiedNodesVis.markers[i].action = visualization_msgs::Marker::ADD;
+      else
+        FOVoccupiedNodesVis.markers[i].action = visualization_msgs::Marker::DELETE;
+    }
+
+    m_FOVmarkerPub.publish(FOVoccupiedNodesVis);
+  }
+
 }
 
 void OctomapServer::publishLocalMap(const ros::Time& rostime){
@@ -582,11 +692,11 @@ void OctomapServer::publishLocalMap(const ros::Time& rostime){
         double size = it.getSize();
         double x = it.getX();
         double y = it.getY();
-#ifdef COLOR_OCTOMAP_SERVER
-        int r = it->getColor().r;
-        int g = it->getColor().g;
-        int b = it->getColor().b;
-#endif
+  #ifdef COLOR_OCTOMAP_SERVER
+          int r = it->getColor().r;
+          int g = it->getColor().g;
+          int b = it->getColor().b;
+  #endif
 
         // Ignore speckles in the map:
         if (m_filterSpeckles && (it.getDepth() == m_treeDepth +1) && isSpeckleNode(it.getKey())){
@@ -621,24 +731,24 @@ void OctomapServer::publishLocalMap(const ros::Time& rostime){
             occupiedNodesVis.markers[idx].colors.push_back(heightMapColor(h));
           }
 
-#ifdef COLOR_OCTOMAP_SERVER
-          if (m_useColoredMap) {
-            std_msgs::ColorRGBA _color; _color.r = (r / 255.); _color.g = (g / 255.); _color.b = (b / 255.); _color.a = 1.0; // TODO/EVALUATE: potentially use occupancy as measure for alpha channel?
-            occupiedNodesVis.markers[idx].colors.push_back(_color);
-          }
-#endif
+  #ifdef COLOR_OCTOMAP_SERVER
+            if (m_useColoredMap) {
+              std_msgs::ColorRGBA _color; _color.r = (r / 255.); _color.g = (g / 255.); _color.b = (b / 255.); _color.a = 1.0; // TODO/EVALUATE: potentially use occupancy as measure for alpha channel?
+              occupiedNodesVis.markers[idx].colors.push_back(_color);
+            }
+  #endif
         }
 
         // insert into pointcloud:
         if (publishPointCloud) {
-#ifdef COLOR_OCTOMAP_SERVER
-          PCLPoint _point = PCLPoint();
-          _point.x = x; _point.y = y; _point.z = z;
-          _point.r = r; _point.g = g; _point.b = b;
-          pclCloud.push_back(_point);
-#else
-          pclCloud.push_back(PCLPoint(x, y, z));
-#endif
+  #ifdef COLOR_OCTOMAP_SERVER
+            PCLPoint _point = PCLPoint();
+            _point.x = x; _point.y = y; _point.z = z;
+            _point.r = r; _point.g = g; _point.b = b;
+            pclCloud.push_back(_point);
+  #else
+            pclCloud.push_back(PCLPoint(x, y, z));
+  #endif
         }
 
       }
@@ -748,11 +858,11 @@ void OctomapServer::publishAll(const ros::Time& rostime){
         double size = it.getSize();
         double x = it.getX();
         double y = it.getY();
-#ifdef COLOR_OCTOMAP_SERVER
-        int r = it->getColor().r;
-        int g = it->getColor().g;
-        int b = it->getColor().b;
-#endif
+  #ifdef COLOR_OCTOMAP_SERVER
+          int r = it->getColor().r;
+          int g = it->getColor().g;
+          int b = it->getColor().b;
+  #endif
 
         // Ignore speckles in the map:
         if (m_filterSpeckles && (it.getDepth() == m_treeDepth +1) && isSpeckleNode(it.getKey())){
@@ -785,24 +895,24 @@ void OctomapServer::publishAll(const ros::Time& rostime){
             occupiedNodesVis.markers[idx].colors.push_back(heightMapColor(h));
           }
 
-#ifdef COLOR_OCTOMAP_SERVER
-          if (m_useColoredMap) {
-            std_msgs::ColorRGBA _color; _color.r = (r / 255.); _color.g = (g / 255.); _color.b = (b / 255.); _color.a = 1.0; // TODO/EVALUATE: potentially use occupancy as measure for alpha channel?
-            occupiedNodesVis.markers[idx].colors.push_back(_color);
-          }
-#endif
+  #ifdef COLOR_OCTOMAP_SERVER
+            if (m_useColoredMap) {
+              std_msgs::ColorRGBA _color; _color.r = (r / 255.); _color.g = (g / 255.); _color.b = (b / 255.); _color.a = 1.0; // TODO/EVALUATE: potentially use occupancy as measure for alpha channel?
+              occupiedNodesVis.markers[idx].colors.push_back(_color);
+            }
+  #endif
         }
 
         // insert into pointcloud:
         if (publishPointCloud) {
-#ifdef COLOR_OCTOMAP_SERVER
-          PCLPoint _point = PCLPoint();
-          _point.x = x; _point.y = y; _point.z = z;
-          _point.r = r; _point.g = g; _point.b = b;
-          pclCloud.push_back(_point);
-#else
-          pclCloud.push_back(PCLPoint(x, y, z));
-#endif
+  #ifdef COLOR_OCTOMAP_SERVER
+            PCLPoint _point = PCLPoint();
+            _point.x = x; _point.y = y; _point.z = z;
+            _point.r = r; _point.g = g; _point.b = b;
+            pclCloud.push_back(_point);
+  #else
+            pclCloud.push_back(PCLPoint(x, y, z));
+  #endif
         }
 
       }
@@ -922,8 +1032,7 @@ void OctomapServer::publishAll(const ros::Time& rostime){
 
 
 bool OctomapServer::octomapBinarySrv(OctomapSrv::Request  &req,
-                                    OctomapSrv::Response &res)
-{
+                                    OctomapSrv::Response &res) {
   ros::WallTime startTime = ros::WallTime::now();
   ROS_INFO("Sending binary map data on service request");
   res.map.header.frame_id = m_worldFrameId;
@@ -937,8 +1046,7 @@ bool OctomapServer::octomapBinarySrv(OctomapSrv::Request  &req,
 }
 
 bool OctomapServer::octomapFullSrv(OctomapSrv::Request  &req,
-                                    OctomapSrv::Response &res)
-{
+                                    OctomapSrv::Response &res) {
   ROS_INFO("Sending full map data on service request");
   res.map.header.frame_id = m_worldFrameId;
   res.map.header.stamp = ros::Time::now();
@@ -1437,9 +1545,9 @@ void OctomapServer::adjustMapData(nav_msgs::OccupancyGrid& map, const nav_msgs::
     toStart = map.data.begin() + ((j+j_off)*m_gridmap.info.width + i_off);
     copy(fromStart, fromEnd, toStart);
 
-//    for (int i =0; i < int(oldMapInfo.width); ++i){
-//      map.data[m_gridmap.info.width*(j+j_off) +i+i_off] = oldMapData[oldMapInfo.width*j +i];
-//    }
+  //    for (int i =0; i < int(oldMapInfo.width); ++i){
+  //      map.data[m_gridmap.info.width*(j+j_off) +i+i_off] = oldMapData[oldMapInfo.width*j +i];
+  //    }
 
   }
 
