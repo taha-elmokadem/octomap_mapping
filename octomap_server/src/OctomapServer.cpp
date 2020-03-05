@@ -538,7 +538,7 @@ void OctomapServer::computeClosestPoint() {
   tf::Quaternion sensorOrientation = sensorToWorldTf.getRotation();
   sensorOrientation.normalize();
 
-  tf::Vector3 vector(0, 1, 0);
+  tf::Vector3 vector(0, 0, 1);
   tf::Vector3 directionVector = tf::quatRotate(sensorOrientation, vector);
   directionVector.normalize();
   // define bounding box around robot
