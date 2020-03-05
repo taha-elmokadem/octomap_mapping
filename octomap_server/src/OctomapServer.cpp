@@ -536,10 +536,11 @@ void OctomapServer::computeClosestPoint() {
   // get current position and orientation
   tf::Vector3    sensorPosition    = baseToWorldTf.getOrigin();
   tf::Quaternion sensorOrientation = baseToWorldTf.getRotation();
+  sensorOrientation.normalize();
 
   tf::Vector3 vector(1, 0, 0);
   tf::Vector3 directionVector = tf::quatRotate(sensorOrientation, vector);
-
+  directionVector.normalize();
   // define bounding box around robot
   point3d min = point3d(sensorPosition[0] - m_pointcloudXBox/2,
                         sensorPosition[1] - m_pointcloudYBox/2,
@@ -576,7 +577,7 @@ void OctomapServer::computeClosestPoint() {
           ROS_INFO_THROTTLE(1.0, "direction from (%f, %f, %f) to (%f, %f, %f) is (%f, %f, %f)", sensorPosition[0], sensorPosition[1], sensorPosition[2], x,y,z, d[0], d[1], d[2]);
 
           // TODO: add a paramter to make FOV variable instead of PI
-          if (acos(cos_ang) < PI) {
+          if (abs(acos(cos_ang)) < PI/2) {
             //create marker:
             if (publishMarkerArray){
               unsigned idx = it.getDepth();
