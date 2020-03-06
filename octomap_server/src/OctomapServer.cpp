@@ -401,7 +401,7 @@ void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr
   cloud_stamp = cloud->header.stamp;
 
   // 
-  computeClosestPoint();
+  //computeClosestPoint();
 }
 
 void OctomapServer::insertScan(const tf::Point& sensorOriginTf, const PCLPointCloud& ground, const PCLPointCloud& nonground){
@@ -742,7 +742,7 @@ void OctomapServer::publishLocalMap(const ros::Time& rostime){
     return;
   }
 
-  bool publishMarkerArray = false;
+  bool publishMarkerArray = true;
   bool publishPointCloud  = true;
 
   // init markers:
@@ -879,7 +879,7 @@ void OctomapServer::publishLocalMap(const ros::Time& rostime){
         occupiedNodesVis.markers[i].action = visualization_msgs::Marker::DELETE;
     }
 
-    m_markerPub.publish(occupiedNodesVis);
+    m_FOVmarkerPub.publish(occupiedNodesVis);
   }
 
   total_elapsed1 = (ros::WallTime::now() - startTime).toSec();
