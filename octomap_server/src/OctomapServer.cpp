@@ -314,6 +314,7 @@ void OctomapServer::publish_all_timer_cb(const ros::TimerEvent& e) {
 void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& cloud){
   ros::WallTime startTime = ros::WallTime::now();
 
+  m_sensorFrameId = cloud->header.frame_id;
 
   //
   // ground filtering in base frame
@@ -323,7 +324,7 @@ void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr
 
   //tf::StampedTransform sensorToWorldTf; // defined in class header file
   try {
-    m_tfListener.lookupTransform(m_worldFrameId, cloud->header.frame_id, cloud->header.stamp, sensorToWorldTf);
+    m_tfListener.lookupTransform(m_worldFrameId, m_sensorFrameId, cloud->header.stamp, sensorToWorldTf);
   } catch(tf::TransformException& ex){
     ROS_ERROR_STREAM( "Transform error of sensor data: " << ex.what() << ", quitting callback");
     return;
@@ -910,9 +911,23 @@ void OctomapServer::publishLocalMap(const ros::Time& rostime){
 
   // finish pointcloud:
   if (publishPointCloud){
+    // transform pcl to sensor frame for perception module
+    tf::StampedTransform worldToSensorTf;
+    try{
+      m_tfListener.lookupTransform(m_sensorFrameId, m_worldFrameId, rostime, worldToSensorTf);
+    }catch(tf::TransformException& ex){
+      ROS_ERROR_STREAM("Transform error for pcl: " << ex.what() << ", quitting callback.");
+    }
+
+    Eigen::Matrix4f worldToSensor;
+    pcl_ros::transformAsMatrix(worldToSensorTf, worldToSensor);
+
+    // transform pointcloud from world frame to sensor frame
+    pcl::transformPointCloud(pclCloud, pclCloud, worldToSensor);
+
     sensor_msgs::PointCloud2 cloud;
     pcl::toROSMsg (pclCloud, cloud);
-    cloud.header.frame_id = m_worldFrameId;
+    cloud.header.frame_id = m_sensorFrameId; //m_worldFrameId;
     cloud.header.stamp = rostime;
     m_localPointCloudPub.publish(cloud);
   }
