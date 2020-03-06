@@ -70,7 +70,10 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_groundFilterDistance(0.04), m_groundFilterAngle(0.15), m_groundFilterPlaneDistance(0.07),
   m_compressMap(true),
   m_incrementalUpdate(false),
-  m_initConfig(true) {
+  m_initConfig(true),
+  enableFOV(false),
+  half_FOV_angle(PI/2 - PI/18) {
+
   double probHit, probMiss, thresMin, thresMax;
 
   m_nh_private.param("frame_id", m_worldFrameId, m_worldFrameId);
@@ -112,6 +115,9 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_nh_private.param("sensor_model/max", thresMax, 0.97);
   m_nh_private.param("compress_map", m_compressMap, m_compressMap);
   m_nh_private.param("incremental_2D_projection", m_incrementalUpdate, m_incrementalUpdate);
+
+  m_nh_private.param("enable_FOV", enableFOV, enableFOV);
+  m_nh_private.param("half_FOV_angle", half_FOV_angle, half_FOV_angle);
 
   if (m_filterGroundPlane && (m_pointcloudMinZ > 0.0 || m_pointcloudMaxZ < 0.0)){
     ROS_WARN_STREAM("You enabled ground filtering but incoming pointclouds will be pre-filtered in ["
@@ -756,9 +762,16 @@ void OctomapServer::publishLocalMap(const ros::Time& rostime){
   // call pre-traversal hook:
   handlePreNodeTraversal(rostime);
 
-  // define bounding box around robot
-  tf::Vector3 sensorPosition = sensorToWorldTf.getOrigin();
+  // get current position and orientation
+  tf::Vector3    sensorPosition    = sensorToWorldTf.getOrigin();
+  tf::Quaternion sensorOrientation = sensorToWorldTf.getRotation();
+  sensorOrientation.normalize();
 
+  tf::Vector3 vector(0, 0, 1);
+  tf::Vector3 directionVector = tf::quatRotate(sensorOrientation, vector);
+  directionVector.normalize();
+
+  // define limits of bounding box around robot
   point3d min = point3d(sensorPosition[0] - m_pointcloudXBox/2,
                         sensorPosition[1] - m_pointcloudYBox/2,
                         sensorPosition[2] - m_pointcloudZBox/2);
@@ -787,11 +800,11 @@ void OctomapServer::publishLocalMap(const ros::Time& rostime){
         double size = it.getSize();
         double x = it.getX();
         double y = it.getY();
-  #ifdef COLOR_OCTOMAP_SERVER
-          int r = it->getColor().r;
-          int g = it->getColor().g;
-          int b = it->getColor().b;
-  #endif
+        #ifdef COLOR_OCTOMAP_SERVER
+                int r = it->getColor().r;
+                int g = it->getColor().g;
+                int b = it->getColor().b;
+        #endif
 
         // Ignore speckles in the map:
         if (m_filterSpeckles && (it.getDepth() == m_treeDepth +1) && isSpeckleNode(it.getKey())){
@@ -805,6 +818,16 @@ void OctomapServer::publishLocalMap(const ros::Time& rostime){
           handleOccupiedNodeInBBX(it);
         */
 
+        // get the direction vector
+        tf::Vector3 d = (tf::Vector3(x, y, z) - sensorPosition).normalized();	
+
+        // get dot product
+        double cos_ang = d.dot(directionVector);
+
+        // check if FOV filtering is enabled to skip points outside FOV in local map
+        if (enableFOV && abs(acos(cos_ang)) > half_FOV_angle) {
+          continue;
+        }
 
         //create marker:
         if (publishMarkerArray){

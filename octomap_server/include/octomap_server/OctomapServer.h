@@ -284,6 +284,8 @@ protected:
   tf::StampedTransform sensorToWorldTf, sensorToBaseTf, baseToWorldTf;
 
   const double PI = 3.14;
+  bool enableFOV;
+  double half_FOV_angle;
 };
 }
 
