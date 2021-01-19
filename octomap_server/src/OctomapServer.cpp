@@ -1076,6 +1076,15 @@ void OctomapServer::handleFreeNodeInBBX(const OcTreeT::iterator& it){
 
 void OctomapServer::update2DMap(const OcTreeT::iterator& it, bool occupied){
 
+  // reject points above maxZ for 2D map
+  double pointZ = it.getZ();
+  double maxZ = 0.4;
+  double minZ = 0.05;
+  if (pointZ > maxZ || pointZ < minZ)
+  {
+    return;
+  }
+
   // update 2D map (occupied always overrides):
 
   if (it.getDepth() == m_maxTreeDepth){
